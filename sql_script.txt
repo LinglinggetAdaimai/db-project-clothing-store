@@ -1,0 +1,772 @@
+create sequence employee_seq;
+
+create sequence branch_seq;
+
+create sequence product_shirts_seq;
+
+create sequence product_pants_seq;
+
+create sequence product_jackets_seq;
+
+create sequence product_skirts_seq;
+
+create sequence product_hoodies_seq;
+
+create sequence product_sweaters_seq;
+
+create sequence product_dresses_seq;
+
+create sequence product_shorts_seq;
+
+create sequence product_jeans_seq;
+
+create table customer
+(
+    customer_id       serial primary key,
+    first_name        varchar(20),
+    last_name         varchar(25)  not null,
+    email             varchar(255) not null unique,
+    phone_number      varchar(15)  not null unique,
+    address           text         not null,
+    gender            varchar(10)
+        constraint customer_gender_check
+            check ((gender)::text = ANY
+                   ((ARRAY ['Male'::character varying, 'Female'::character varying, 'Other'::character varying])::text[])),
+    birth_date        date         not null,
+    registration_date timestamp default CURRENT_TIMESTAMP
+);
+
+create table transaction
+(
+    transaction_id   serial primary key,
+    transaction_date timestamp default CURRENT_TIMESTAMP,
+    payment_method   varchar(50) not null,
+    order_id         integer     not null
+);
+
+create table branch
+(
+    branch_id      varchar(10) default concat('BR', lpad((nextval('branch_seq'::regclass))::text, 3, '0'::text)) not null primary key,
+    branch_name    varchar(100) not null,
+    manager_id     varchar(10),
+    location       text not null,
+    contact_number varchar(15) not null unique,
+    opening_date   date                                                                                    not null,
+    status         varchar(20)
+    constraint branch_status_check
+            check ((status)::text = ANY ((ARRAY ['Open'::character varying, 'Closed'::character varying])::text[]))
+);
+
+create table order_table
+(
+    order_id       serial
+        primary key,
+    order_date     timestamp   default CURRENT_TIMESTAMP,
+    total_amount   numeric(10, 2)
+        constraint order_table_total_amount_check
+            check (total_amount >= (0)::numeric),
+    payment_status varchar(20) not null
+        constraint order_table_payment_status_check
+            check ((payment_status)::text = ANY
+                   ((ARRAY ['Paid'::character varying, 'Pending'::character varying, 'Cancelled'::character varying])::text[])),
+    customer_id    integer     not null
+        constraint fk_order_customer
+            references customer,
+    branch_id      varchar(10)
+        constraint fk_branch_id
+            references branch,
+    order_status   varchar(20) default 'Pending'::character varying
+);
+
+create index idx_branch_id
+    on branch (branch_id);
+
+create table product
+(
+    product_id   varchar(10)    not null primary key,
+    product_name varchar(255)   not null,
+    barcode      varchar(50)    not null unique,
+    colour       varchar(50),
+    size         varchar(10),
+    gender       varchar(10)
+        constraint product_gender_check
+            check ((gender)::text = ANY
+                   ((ARRAY ['Male'::character varying, 'Female'::character varying, 'Unisex'::character varying])::text[])),
+    category     varchar(50)    not null,
+    price        numeric(10, 2) not null
+        constraint product_price_check
+            check (price >= (0)::numeric)
+);
+
+create table order_item
+(
+    order_item_id serial
+        primary key,
+    order_id      integer        not null
+        constraint fk_order_item_order
+            references order_table
+            on delete cascade,
+    product_id    varchar(10)    not null
+        constraint fk_product_id
+            references product
+            on delete cascade,
+    quantity      integer        not null
+        constraint order_item_quantity_check
+            check (quantity > 0),
+    subtotal      numeric(10, 2) not null
+        constraint order_item_subtotal_check
+            check (subtotal >= (0)::numeric)
+);
+
+create index idx_product_id
+    on product (product_id);
+
+create table promotion
+(
+    promotion_id        serial primary key,
+    promotion_name      varchar(255) not null,
+    barcode             varchar(50),
+    discount_percentage integer      not null
+);
+
+create table product_promotion
+(
+    product_id   varchar(10) not null,
+    promotion_id integer     not null,
+    primary key (product_id, promotion_id)
+);
+
+create table inventory
+(
+    inventory_id   serial primary key,
+    branch_id      varchar     not null
+        constraint fk_inve ntory_branch
+            references branch,
+    product_id     varchar(10) not null
+        constraint fk_inventory_product
+            references product,
+    stock_quantity integer
+        constraint inventory_stock_quantity_check
+            check (stock_quantity >= 0),
+    constraint inventory_branch_product_unique
+        unique (branch_id, product_id)
+);
+
+create table employee
+(
+    employee_id    varchar(10) default concat('EM',lpad((nextval('employee_seq'::regclass))::text, 3, '0'::text)) not nullprimary key,
+    first_name     varchar(20),
+    last_name      varchar(25)    not null,
+    role           varchar(50)    not null,
+    contact_number varchar(15)    not null
+        unique,
+    email          varchar(255)   not null
+        unique,
+    salary         numeric(10, 2)
+        constraint employee_salary_check
+            check (salary >= (0)::numeric),
+    branch_id      varchar(10)    not null
+        constraint fk_branch_id
+            references branch,
+    hire_date      date           not null,
+    address        text
+);
+
+alter table branch
+    add constraint fk_manager_id
+        foreign key (manager_id) references employee
+            on delete set null;
+
+create table stock_transfer
+(
+    transfer_id       serial primary key,
+    product_id        varchar(10) not null
+        references product
+            on delete cascade,
+    source_branch_id  varchar(10) not null
+        references branch
+            on delete cascade,
+    target_branch_id  varchar(10) not null
+        references branch
+            on delete cascade,
+    transfer_quantity integer     not null
+        constraint stock_transfer_transfer_quantity_check
+            check (transfer_quantity > 0),
+    transfer_date     timestamp   default CURRENT_TIMESTAMP,
+    transfer_status   varchar(20) default 'Pending'::character varying
+        constraint check_transfer_status
+            check ((transfer_status)::text = ANY
+                   ((ARRAY ['Pending'::character varying, 'In Progress'::character varying, 'Completed'::character varying, 'Cancelled'::character varying])::text[]))
+);
+
+create table restock_order
+(
+    restock_order_id serial
+        primary key,
+    product_id       varchar(10) not null,
+    branch_id        varchar(10) not null,
+    order_quantity   integer     not null
+        constraint restock_order_order_quantity_check
+            check (order_quantity > 0),
+    order_date       timestamp default CURRENT_TIMESTAMP
+);
+
+
+create table audit_log
+(
+    audit_id            serial
+        primary key,
+    table_name          text not null,
+    operation           char not null,
+    user_name           text not null,
+    operation_timestamp timestamp with time zone default CURRENT_TIMESTAMP,
+    old_data            jsonb,
+    new_data            jsonb
+);
+
+create view inventory_report
+            (branch_id, branch_name, product_id, product_name, category, colour, size, price, stock_quantity,
+             sales_last_30_days) as
+SELECT i.branch_id,
+       b.branch_name,
+       p.product_id,
+       p.product_name,
+       p.category,
+       p.colour,
+       p.size,
+       p.price,
+       i.stock_quantity,
+       COALESCE(sum(oi.quantity), 0::bigint) AS sales_last_30_days
+FROM inventory i
+         JOIN branch b ON i.branch_id::text = b.branch_id::text
+         JOIN product p ON i.product_id::text = p.product_id::text
+         LEFT JOIN order_item oi ON i.product_id::text = oi.product_id::text
+         LEFT JOIN order_table ot ON oi.order_id = ot.order_id AND ot.branch_id::text = ot.branch_id::text AND
+                                     ot.order_date > (CURRENT_DATE - '30 days'::interval)
+GROUP BY i.branch_id, b.branch_name, p.product_id, i.stock_quantity
+ORDER BY i.branch_id, p.product_id;
+
+
+create view inventory_report_br001
+            (branch_id, branch_name, product_id, product_name, category, colour, size, price, stock_quantity,
+             sales_last_30_days) as
+SELECT branch_id,
+       branch_name,
+       product_id,
+       product_name,
+       category,
+       colour,
+       size,
+       price,
+       stock_quantity,
+       sales_last_30_days
+FROM inventory_report
+WHERE branch_id::text = 'BR001'::text;
+
+create view inventory_report_br002
+            (branch_id, branch_name, product_id, product_name, category, colour, size, price, stock_quantity,
+             sales_last_30_days) as
+SELECT branch_id,
+       branch_name,
+       product_id,
+       product_name,
+       category,
+       colour,
+       size,
+       price,
+       stock_quantity,
+       sales_last_30_days
+FROM inventory_report
+WHERE branch_id::text = 'BR002'::text;
+
+create view inventory_report_br003
+            (branch_id, branch_name, product_id, product_name, category, colour, size, price, stock_quantity,
+             sales_last_30_days) as
+SELECT branch_id,
+       branch_name,
+       product_id,
+       product_name,
+       category,
+       colour,
+       size,
+       price,
+       stock_quantity,
+       sales_last_30_days
+FROM inventory_report
+WHERE branch_id::text = 'BR003'::text;
+
+create view inventory_report_br004
+            (branch_id, branch_name, product_id, product_name, category, colour, size, price, stock_quantity,
+             sales_last_30_days) as
+SELECT branch_id,
+       branch_name,
+       product_id,
+       product_name,
+       category,
+       colour,
+       size,
+       price,
+       stock_quantity,
+       sales_last_30_days
+FROM inventory_report
+WHERE branch_id::text = 'BR004'::text;
+
+
+create view daily_sales_report (sale_date, branch_id, total_sales_amount, total_orders, unique_customers) as
+SELECT order_date::date                     AS sale_date,
+       branch_id,
+       sum(total_amount)::integer           AS total_sales_amount,
+       count(order_id)::integer             AS total_orders,
+       count(DISTINCT customer_id)::integer AS unique_customers
+FROM order_table
+WHERE payment_status::text = 'Paid'::text
+GROUP BY (order_date::date), branch_id
+ORDER BY (order_date::date), branch_id;
+
+
+create view today_sales_report (sale_date, branch_id, total_sales_amount, total_orders, unique_customers) as
+SELECT order_date::date            AS sale_date,
+       branch_id,
+       sum(total_amount)           AS total_sales_amount,
+       count(order_id)             AS total_orders,
+       count(DISTINCT customer_id) AS unique_customers
+FROM order_table
+WHERE payment_status::text = 'Paid'::text
+  AND order_date::date = CURRENT_DATE
+GROUP BY (order_date::date), branch_id
+ORDER BY branch_id;
+
+create function assign_product_id() returns trigger
+    language plpgsql
+as
+$$
+BEGIN
+    -- Check the category and assign the product_id based on the sequence and category
+    IF NEW.category = 'Shirts' THEN
+        NEW.product_id := CONCAT('SH', LPAD(nextval('product_shirts_seq')::TEXT, 3, '0'));
+    ELSIF NEW.category = 'Pants' THEN
+        NEW.product_id := CONCAT('PT', LPAD(nextval('product_pants_seq')::TEXT, 3, '0'));
+    ELSIF NEW.category = 'Jackets' THEN
+        NEW.product_id := CONCAT('JK', LPAD(nextval('product_jackets_seq')::TEXT, 3, '0'));
+    ELSIF NEW.category = 'Skirts' THEN
+        NEW.product_id := CONCAT('SK', LPAD(nextval('product_skirts_seq')::TEXT, 3, '0'));
+    ELSIF NEW.category = 'Hoodies' THEN
+        NEW.product_id := CONCAT('HD', LPAD(nextval('product_hoodies_seq')::TEXT, 3, '0'));
+    ELSIF NEW.category = 'Sweaters' THEN
+        NEW.product_id := CONCAT('SW', LPAD(nextval('product_sweaters_seq')::TEXT, 3, '0'));
+    ELSIF NEW.category = 'Dresses' THEN
+        NEW.product_id := CONCAT('DR', LPAD(nextval('product_dresses_seq')::TEXT, 3, '0'));
+    ELSIF NEW.category = 'Shorts' THEN
+        NEW.product_id := CONCAT('SHR', LPAD(nextval('product_shorts_seq')::TEXT, 3, '0'));
+    ELSIF NEW.category = 'Jeans' THEN
+        NEW.product_id := CONCAT('JN', LPAD(nextval('product_jeans_seq')::TEXT, 3, '0'));
+    ELSE
+        RAISE EXCEPTION 'Invalid category: %', NEW.category;
+    END IF;
+
+    -- Return the modified row
+    RETURN NEW;
+END;
+$$;
+
+create trigger trigger_assign_product_id
+    before insert
+    on product
+    for each row
+execute procedure assign_product_id();
+
+create function check_centralized_stock(p_product_id integer)
+    returns TABLE(total_stock_quantity integer)
+    language plpgsql
+as
+$$
+BEGIN
+    -- Sum the stock_quantity across all branches for the given product_id
+    RETURN QUERY
+    SELECT SUM(i.stock_quantity)
+    FROM inventory i
+    WHERE i.product_id = p_product_id;
+END;
+$$;
+
+create function check_centralized_stock(p_product_id character varying)
+    returns TABLE(total_stock_quantity integer)
+    language plpgsql
+as
+$$
+BEGIN
+    -- Sum the stock_quantity across all branches for the given product_id and cast the result to INTEGER
+    RETURN QUERY
+    SELECT SUM(i.stock_quantity)::INTEGER
+    FROM inventory i
+    WHERE i.product_id = p_product_id;
+END;
+$$;
+
+create function check_centralized_stock()
+    returns TABLE(product_id character varying, product_name character varying, colour character varying, gender character varying, category character varying, price numeric, total_stock_quantity integer)
+    language plpgsql
+as
+$$
+BEGIN
+    -- Return each product's details with the total stock quantity summed
+    RETURN QUERY
+    SELECT
+        p.product_id,
+        p.product_name,
+        p.colour,
+        p.gender,
+        p.category,
+        p.price,
+        SUM(i.stock_quantity)::INTEGER AS total_stock_quantity  -- Cast SUM to INTEGER
+    FROM
+        product p
+    LEFT JOIN
+        inventory i ON p.product_id = i.product_id
+    GROUP BY
+        p.product_id, p.product_name, p.colour, p.gender, p.category, p.price;
+END;
+$$;
+
+
+create function deduct_stock_on_payment() returns trigger
+    language plpgsql
+as
+$$
+DECLARE
+    prod RECORD;
+BEGIN
+    -- Loop through each order_item to deduct stock
+    FOR prod IN
+        SELECT product_id, quantity FROM order_item WHERE order_id = NEW.order_id
+    LOOP
+        -- Deduct stock from the inventory
+        UPDATE inventory
+        SET stock_quantity = stock_quantity - prod.quantity
+        WHERE product_id = prod.product_id
+        AND branch_id = NEW.branch_id;
+
+        -- Check if stock is negative after deduction
+        IF (SELECT stock_quantity FROM inventory WHERE product_id = prod.product_id AND branch_id = NEW.branch_id) < 0 THEN
+            -- If stock is negative, raise an error and rollback
+            RAISE EXCEPTION 'Not enough stock for product % in branch %', prod.product_id, NEW.branch_id;
+        END IF;
+    END LOOP;
+
+    -- Update order status to 'Completed' after stock deduction is successful
+    UPDATE order_table
+    SET order_status = 'Completed'
+    WHERE order_id = NEW.order_id;
+
+    RETURN NEW;
+END;
+$$;
+
+create trigger trigger_deduct_stock_on_payment
+    after update
+        of payment_status
+    on order_table
+    for each row
+    when (new.payment_status::text = 'Paid'::text)
+execute procedure deduct_stock_on_payment();
+
+create trigger update_order_status_on_payment
+    after update
+        of payment_status
+    on order_table
+    for each row
+    when (new.payment_status::text = 'Paid'::text)
+execute procedure deduct_stock_on_payment();
+
+create function revert_stock_on_cancellation() returns trigger
+    language plpgsql
+as
+$$
+BEGIN
+    -- Add back the stock for each product in the order
+    UPDATE inventory
+    SET stock_quantity = stock_quantity + oi.quantity
+    FROM order_item oi, order_table ot
+    WHERE inventory.product_id = oi.product_id
+      AND inventory.branch_id = OLD.branch_id
+      AND oi.order_id = OLD.order_id;
+
+    RETURN OLD;
+END;
+$$;
+
+create trigger trigger_revert_stock_on_cancellation
+    after update
+        of order_status
+    on order_table
+    for each row
+    when (new.order_status::text = 'Cancelled'::text)
+execute procedure revert_stock_on_cancellation();
+
+create function generate_sales_report(p_branch_id character varying, p_start_date date, p_end_date date, p_report_type character varying)
+    returns TABLE(report_date date, total_sales numeric, total_orders integer)
+    language plpgsql
+as
+$$
+BEGIN
+    
+    IF p_report_type = 'daily' THEN
+        RETURN QUERY
+        SELECT o.order_date::DATE AS report_date,
+               SUM(oi.quantity * p.price) AS total_sales,
+               COUNT(DISTINCT o.order_id)::INTEGER AS total_orders
+        FROM order_table o
+        JOIN order_item oi ON o.order_id = oi.order_id
+        JOIN product p ON oi.product_id = p.product_id
+        WHERE o.branch_id = p_branch_id
+          AND o.payment_status = 'paid'
+          AND o.order_date BETWEEN p_start_date AND p_end_date
+        GROUP BY o.order_date::DATE
+        ORDER BY report_date;
+
+    ELSIF p_report_type = 'weekly' THEN
+        RETURN QUERY
+        SELECT DATE_TRUNC('week', o.order_date)::DATE AS report_date,
+               SUM(oi.quantity * p.price) AS total_sales,
+               COUNT(DISTINCT o.order_id)::INTEGER AS total_orders
+        FROM order_table o
+        JOIN order_item oi ON o.order_id = oi.order_id
+        JOIN product p ON oi.product_id = p.product_id
+        WHERE o.branch_id = p_branch_id
+          AND o.payment_status = 'Paid'
+          AND o.order_date BETWEEN p_start_date AND p_end_date
+        GROUP BY DATE_TRUNC('week', o.order_date)::DATE
+        ORDER BY report_date;
+
+    ELSIF p_report_type = 'monthly' THEN
+        RETURN QUERY
+        SELECT DATE_TRUNC('month', o.order_date)::DATE AS report_date,
+               SUM(oi.quantity * p.price) AS total_sales,
+               COUNT(DISTINCT o.order_id)::INTEGER AS total_orders
+        FROM order_table o
+        JOIN order_item oi ON o.order_id = oi.order_id
+        JOIN product p ON oi.product_id = p.product_id
+        WHERE o.branch_id = p_branch_id
+          AND o.payment_status = 'Paid'
+          AND o.order_date BETWEEN p_start_date AND p_end_date
+        GROUP BY DATE_TRUNC('month', o.order_date)::DATE
+        ORDER BY report_date;
+
+    ELSIF p_report_type = 'quarterly' THEN
+        RETURN QUERY
+        SELECT EXTRACT(YEAR FROM o.order_date) AS year,
+               EXTRACT(QUARTER FROM o.order_date) AS quarter,
+               SUM(oi.quantity * p.price) AS total_sales,
+               COUNT(DISTINCT o.order_id)::INTEGER AS total_orders
+        FROM order_table o
+        JOIN order_item oi ON o.order_id = oi.order_id
+        JOIN product p ON oi.product_id = p.product_id
+        WHERE o.branch_id = p_branch_id
+          AND o.payment_status = 'Paid'
+          AND o.order_date BETWEEN p_start_date AND p_end_date
+        GROUP BY EXTRACT(YEAR FROM o.order_date), EXTRACT(QUARTER FROM o.order_date)
+        ORDER BY year, quarter;
+
+    ELSIF p_report_type = 'yearly' THEN
+        RETURN QUERY
+        SELECT EXTRACT(YEAR FROM o.order_date)::INTEGER AS report_date,
+               SUM(oi.quantity * p.price) AS total_sales,
+               COUNT(DISTINCT o.order_id)::INTEGER AS total_orders
+        FROM order_table o
+        JOIN order_item oi ON o.order_id = oi.order_id
+        JOIN product p ON oi.product_id = p.product_id
+        WHERE o.branch_id = p_branch_id
+          AND o.payment_status = 'Paid'
+          AND o.order_date BETWEEN p_start_date AND p_end_date
+        GROUP BY EXTRACT(YEAR FROM o.order_date)
+        ORDER BY report_date;
+
+    ELSE
+        RAISE EXCEPTION 'Invalid report type. Valid options are daily, weekly, monthly, quarterly, and yearly.';
+    END IF;
+END;
+$$;
+
+create function update_order_status_on_payment() returns trigger
+    language plpgsql
+as
+$$
+BEGIN
+    -- Check if payment status is 'Paid'
+    IF NEW.payment_status = 'Paid' THEN
+        -- Update the order status to 'Completed'
+        UPDATE order_table
+        SET order_status = 'Completed'
+        WHERE order_id = NEW.order_id;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+create function audit_trigger_fn() returns trigger
+    language plpgsql
+as
+$$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        INSERT INTO public.audit_log (table_name, operation, user_name, operation_timestamp, old_data)
+        VALUES (
+            TG_TABLE_NAME,
+            'D',
+            SESSION_USER,
+            CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok',
+            row_to_json(OLD)::jsonb
+        );
+    ELSIF TG_OP = 'INSERT' THEN
+        INSERT INTO public.audit_log (table_name, operation, user_name, operation_timestamp, new_data)
+        VALUES (
+            TG_TABLE_NAME,
+            'I',
+            SESSION_USER,
+            CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok',
+            row_to_json(NEW)::jsonb
+        );
+    ELSIF TG_OP = 'UPDATE' THEN
+        INSERT INTO public.audit_log (table_name, operation, user_name, operation_timestamp, old_data, new_data)
+        VALUES (
+            TG_TABLE_NAME,
+            'U',
+            SESSION_USER,
+            CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok',
+            row_to_json(OLD)::jsonb,
+            row_to_json(NEW)::jsonb
+        );
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+create trigger customer_audit_trigger
+    after insert or update or delete
+    on customer
+    for each row
+execute procedure audit_trigger_fn();
+
+create trigger transaction_audit_trigger
+    after insert or update or delete
+    on transaction
+    for each row
+execute procedure audit_trigger_fn();
+
+create trigger order_table_audit_trigger
+    after insert or update or delete
+    on order_table
+    for each row
+execute procedure audit_trigger_fn();
+
+create trigger branch_audit_trigger
+    after insert or update or delete
+    on branch
+    for each row
+execute procedure audit_trigger_fn();
+
+create trigger order_item_audit_trigger
+    after insert or update or delete
+    on order_item
+    for each row
+execute procedure audit_trigger_fn();
+
+create trigger product_audit_trigger
+    after insert or update or delete
+    on product
+    for each row
+execute procedure audit_trigger_fn();
+
+create trigger promotion_audit_trigger
+    after insert or update or delete
+    on promotion
+    for each row
+execute procedure audit_trigger_fn();
+
+create trigger product_promotion_audit_trigger
+    after insert or update or delete
+    on product_promotion
+    for each row
+execute procedure audit_trigger_fn();
+
+create trigger inventory_audit_trigger
+    after insert or update or delete
+    on inventory
+    for each row
+execute procedure audit_trigger_fn();
+
+create trigger employee_audit_trigger
+    after insert or update or delete
+    on employee
+    for each row
+execute procedure audit_trigger_fn();
+
+create trigger stock_transfer_audit_trigger
+    after insert or update or delete
+    on stock_transfer
+    for each row
+execute procedure audit_trigger_fn();
+
+create trigger restock_order_audit_trigger
+    after insert or update or delete
+    on restock_order
+    for each row
+execute procedure audit_trigger_fn();
+
+create procedure transfer_stock(IN p_product_id text, IN p_source_branch_id text, IN p_target_branch_id text, IN p_transfer_quantity integer)
+    language plpgsql
+as
+$$
+DECLARE
+    available_stock INTEGER;
+BEGIN
+    -- Lock the inventory row for the source branch
+    SELECT stock_quantity INTO available_stock
+    FROM inventory
+    WHERE product_id = p_product_id
+      AND branch_id = p_source_branch_id
+    FOR UPDATE;
+
+    -- Check if inventory record exists
+    IF available_stock IS NULL THEN
+        RAISE EXCEPTION 'No inventory record found for product % at branch %',
+            p_product_id, p_source_branch_id;
+    END IF;
+
+    -- Check if sufficient stock is available
+    IF available_stock < p_transfer_quantity THEN
+        RAISE EXCEPTION 'Insufficient stock for product % at branch %. Available: %, Requested: %',
+            p_product_id, p_source_branch_id, available_stock, p_transfer_quantity;
+    END IF;
+
+    -- Deduct stock from the source branch
+    UPDATE inventory
+    SET stock_quantity = stock_quantity - p_transfer_quantity
+    WHERE product_id = p_product_id
+      AND branch_id = p_source_branch_id;
+
+    -- Add stock to the target branch using UPSERT
+    INSERT INTO inventory (branch_id, product_id, stock_quantity)
+    VALUES (p_target_branch_id, p_product_id, p_transfer_quantity)
+    ON CONFLICT (branch_id, product_id)
+    DO UPDATE SET stock_quantity = inventory.stock_quantity + EXCLUDED.stock_quantity;
+
+    -- Insert a record into stock_transfer table
+    INSERT INTO stock_transfer (
+        product_id,
+        source_branch_id,
+        target_branch_id,
+        transfer_quantity,
+        transfer_status,
+        transfer_date
+    ) VALUES (
+        p_product_id,
+        p_source_branch_id,
+        p_target_branch_id,
+        p_transfer_quantity,
+        'Completed',
+        CURRENT_TIMESTAMP
+    );
+END;
+$$;
+
