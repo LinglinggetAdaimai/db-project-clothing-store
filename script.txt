@@ -22,11 +22,14 @@ create sequence product_jeans_seq;
 
 create table customer
 (
-    customer_id       serial primary key,
+    customer_id       serial
+        primary key,
     first_name        varchar(20),
     last_name         varchar(25)  not null,
-    email             varchar(255) not null unique,
-    phone_number      varchar(15)  not null unique,
+    email             varchar(255) not null
+        unique,
+    phone_number      varchar(15)  not null
+        unique,
     address           text         not null,
     gender            varchar(10)
         constraint customer_gender_check
@@ -38,22 +41,25 @@ create table customer
 
 create table transaction
 (
-    transaction_id   serial primary key,
+    transaction_id   serial
+        primary key,
     transaction_date timestamp default CURRENT_TIMESTAMP,
-    payment_method   varchar(50) not null,
-    order_id         integer     not null
+    order_id         integer not null
 );
 
 create table branch
 (
-    branch_id      varchar(10) default concat('BR', lpad((nextval('branch_seq'::regclass))::text, 3, '0'::text)) not null primary key,
-    branch_name    varchar(100) not null,
+    branch_id      varchar(10) default concat('BR',
+                                              lpad((nextval('branch_seq'::regclass))::text, 3, '0'::text)) not null
+        primary key,
+    branch_name    varchar(100)                                                                            not null,
     manager_id     varchar(10),
-    location       text not null,
-    contact_number varchar(15) not null unique,
+    location       text                                                                                    not null,
+    contact_number varchar(15)                                                                             not null
+        unique,
     opening_date   date                                                                                    not null,
     status         varchar(20)
-    constraint branch_status_check
+        constraint branch_status_check
             check ((status)::text = ANY ((ARRAY ['Open'::character varying, 'Closed'::character varying])::text[]))
 );
 
@@ -69,9 +75,13 @@ create table order_table
         constraint order_table_payment_status_check
             check ((payment_status)::text = ANY
                    ((ARRAY ['Paid'::character varying, 'Pending'::character varying, 'Cancelled'::character varying])::text[])),
-    customer_id    integer     not null
+    customer_id    integer
+        constraint fk_customer_order
+            references customer
+            on delete set null
         constraint fk_order_customer
-            references customer,
+            references customer
+            on delete set null,
     branch_id      varchar(10)
         constraint fk_branch_id
             references branch,
@@ -83,19 +93,23 @@ create index idx_branch_id
 
 create table product
 (
-    product_id   varchar(10)    not null primary key,
-    product_name varchar(255)   not null,
-    barcode      varchar(50)    not null unique,
-    colour       varchar(50),
-    size         varchar(10),
-    gender       varchar(10)
+    product_id      varchar(10)    not null
+        primary key,
+    product_name    varchar(255)   not null,
+    barcode         varchar(50)    not null
+        unique,
+    colour          varchar(50),
+    size            varchar(10),
+    gender          varchar(10)
         constraint product_gender_check
             check ((gender)::text = ANY
                    ((ARRAY ['Male'::character varying, 'Female'::character varying, 'Unisex'::character varying])::text[])),
-    category     varchar(50)    not null,
-    price        numeric(10, 2) not null
+    category        varchar(50)    not null,
+    price           numeric(10, 2) not null
         constraint product_price_check
-            check (price >= (0)::numeric)
+            check (price >= (0)::numeric),
+    original_price  numeric(10, 2),
+    is_on_promotion boolean default false
 );
 
 create table order_item
@@ -123,10 +137,12 @@ create index idx_product_id
 
 create table promotion
 (
-    promotion_id        serial primary key,
+    promotion_id        serial
+        primary key,
     promotion_name      varchar(255) not null,
-    barcode             varchar(50),
-    discount_percentage integer      not null
+    discount_percentage integer      not null,
+    start_date          date         not null,
+    end_date            date         not null
 );
 
 create table product_promotion
@@ -138,9 +154,10 @@ create table product_promotion
 
 create table inventory
 (
-    inventory_id   serial primary key,
+    inventory_id   serial
+        primary key,
     branch_id      varchar     not null
-        constraint fk_inve ntory_branch
+        constraint fk_inventory_branch
             references branch,
     product_id     varchar(10) not null
         constraint fk_inventory_product
@@ -154,32 +171,35 @@ create table inventory
 
 create table employee
 (
-    employee_id    varchar(10) default concat('EM',lpad((nextval('employee_seq'::regclass))::text, 3, '0'::text)) not nullprimary key,
+    employee_id    varchar(10) default concat('EM',
+                                              lpad((nextval('employee_seq'::regclass))::text, 3, '0'::text)) not null
+        primary key,
     first_name     varchar(20),
-    last_name      varchar(25)    not null,
-    role           varchar(50)    not null,
-    contact_number varchar(15)    not null
+    last_name      varchar(25)                                                                               not null,
+    role           varchar(50)                                                                               not null,
+    contact_number varchar(15)                                                                               not null
         unique,
-    email          varchar(255)   not null
+    email          varchar(255)                                                                              not null
         unique,
     salary         numeric(10, 2)
         constraint employee_salary_check
             check (salary >= (0)::numeric),
-    branch_id      varchar(10)    not null
+    branch_id      varchar(10)                                                                               not null
         constraint fk_branch_id
             references branch,
-    hire_date      date           not null,
+    hire_date      date                                                                                      not null,
     address        text
 );
 
 alter table branch
-    add constraint fk_manager_id
+    add constraint fk_branch_manager
         foreign key (manager_id) references employee
             on delete set null;
 
 create table stock_transfer
 (
-    transfer_id       serial primary key,
+    transfer_id       serial
+        primary key,
     product_id        varchar(10) not null
         references product
             on delete cascade,
@@ -198,19 +218,6 @@ create table stock_transfer
             check ((transfer_status)::text = ANY
                    ((ARRAY ['Pending'::character varying, 'In Progress'::character varying, 'Completed'::character varying, 'Cancelled'::character varying])::text[]))
 );
-
-create table restock_order
-(
-    restock_order_id serial
-        primary key,
-    product_id       varchar(10) not null,
-    branch_id        varchar(10) not null,
-    order_quantity   integer     not null
-        constraint restock_order_order_quantity_check
-            check (order_quantity > 0),
-    order_date       timestamp default CURRENT_TIMESTAMP
-);
-
 
 create table audit_log
 (
@@ -245,7 +252,6 @@ FROM inventory i
                                      ot.order_date > (CURRENT_DATE - '30 days'::interval)
 GROUP BY i.branch_id, b.branch_name, p.product_id, i.stock_quantity
 ORDER BY i.branch_id, p.product_id;
-
 
 create view inventory_report_br001
             (branch_id, branch_name, product_id, product_name, category, colour, size, price, stock_quantity,
@@ -311,7 +317,6 @@ SELECT branch_id,
 FROM inventory_report
 WHERE branch_id::text = 'BR004'::text;
 
-
 create view daily_sales_report (sale_date, branch_id, total_sales_amount, total_orders, unique_customers) as
 SELECT order_date::date                     AS sale_date,
        branch_id,
@@ -322,7 +327,6 @@ FROM order_table
 WHERE payment_status::text = 'Paid'::text
 GROUP BY (order_date::date), branch_id
 ORDER BY (order_date::date), branch_id;
-
 
 create view today_sales_report (sale_date, branch_id, total_sales_amount, total_orders, unique_customers) as
 SELECT order_date::date            AS sale_date,
@@ -340,34 +344,34 @@ create function assign_product_id() returns trigger
     language plpgsql
 as
 $$
-BEGIN
-    -- Check the category and assign the product_id based on the sequence and category
-    IF NEW.category = 'Shirts' THEN
-        NEW.product_id := CONCAT('SH', LPAD(nextval('product_shirts_seq')::TEXT, 3, '0'));
-    ELSIF NEW.category = 'Pants' THEN
-        NEW.product_id := CONCAT('PT', LPAD(nextval('product_pants_seq')::TEXT, 3, '0'));
-    ELSIF NEW.category = 'Jackets' THEN
-        NEW.product_id := CONCAT('JK', LPAD(nextval('product_jackets_seq')::TEXT, 3, '0'));
-    ELSIF NEW.category = 'Skirts' THEN
-        NEW.product_id := CONCAT('SK', LPAD(nextval('product_skirts_seq')::TEXT, 3, '0'));
-    ELSIF NEW.category = 'Hoodies' THEN
-        NEW.product_id := CONCAT('HD', LPAD(nextval('product_hoodies_seq')::TEXT, 3, '0'));
-    ELSIF NEW.category = 'Sweaters' THEN
-        NEW.product_id := CONCAT('SW', LPAD(nextval('product_sweaters_seq')::TEXT, 3, '0'));
-    ELSIF NEW.category = 'Dresses' THEN
-        NEW.product_id := CONCAT('DR', LPAD(nextval('product_dresses_seq')::TEXT, 3, '0'));
-    ELSIF NEW.category = 'Shorts' THEN
-        NEW.product_id := CONCAT('SHR', LPAD(nextval('product_shorts_seq')::TEXT, 3, '0'));
-    ELSIF NEW.category = 'Jeans' THEN
-        NEW.product_id := CONCAT('JN', LPAD(nextval('product_jeans_seq')::TEXT, 3, '0'));
-    ELSE
-        RAISE EXCEPTION 'Invalid category: %', NEW.category;
-    END IF;
+                           BEGIN
+                               -- Check the category and assign the product_id based on the sequence and category
+                               IF NEW.category = 'Shirts' THEN
+                                   NEW.product_id := CONCAT('SH', LPAD(nextval('product_shirts_seq')::TEXT, 3, '0'));
+                               ELSIF NEW.category = 'Pants' THEN
+                                   NEW.product_id := CONCAT('PT', LPAD(nextval('product_pants_seq')::TEXT, 3, '0'));
+                               ELSIF NEW.category = 'Jackets' THEN
+                                   NEW.product_id := CONCAT('JK', LPAD(nextval('product_jackets_seq')::TEXT, 3, '0'));
+                               ELSIF NEW.category = 'Skirts' THEN
+                                   NEW.product_id := CONCAT('SK', LPAD(nextval('product_skirts_seq')::TEXT, 3, '0'));
+                               ELSIF NEW.category = 'Hoodies' THEN
+                                   NEW.product_id := CONCAT('HD', LPAD(nextval('product_hoodies_seq')::TEXT, 3, '0'));
+                               ELSIF NEW.category = 'Sweaters' THEN
+                                   NEW.product_id := CONCAT('SW', LPAD(nextval('product_sweaters_seq')::TEXT, 3, '0'));
+                               ELSIF NEW.category = 'Dresses' THEN
+                                   NEW.product_id := CONCAT('DR', LPAD(nextval('product_dresses_seq')::TEXT, 3, '0'));
+                               ELSIF NEW.category = 'Shorts' THEN
+                                   NEW.product_id := CONCAT('SHR', LPAD(nextval('product_shorts_seq')::TEXT, 3, '0'));
+                                ELSIF NEW.category = 'Jeans' THEN
+                                   NEW.product_id := CONCAT('JN', LPAD(nextval('product_jeans_seq')::TEXT, 3, '0'));
+                               ELSE
+                                   RAISE EXCEPTION 'Invalid category: %', NEW.category;
+                               END IF;
 
-    -- Return the modified row
-    RETURN NEW;
-END;
-$$;
+                               -- Return the modified row
+                               RETURN NEW;
+                           END;
+                           $$;
 
 create trigger trigger_assign_product_id
     before insert
@@ -428,7 +432,6 @@ BEGIN
 END;
 $$;
 
-
 create function deduct_stock_on_payment() returns trigger
     language plpgsql
 as
@@ -457,6 +460,12 @@ BEGIN
     UPDATE order_table
     SET order_status = 'Completed'
     WHERE order_id = NEW.order_id;
+    RAISE NOTICE 'deduct_stock_on_payment function called for order %', NEW.order_id;
+
+
+    -- insert into transaction table
+    INSERT INTO transaction (order_id)
+    VALUES (NEW.order_id);
 
     RETURN NEW;
 END;
@@ -707,12 +716,6 @@ create trigger stock_transfer_audit_trigger
     for each row
 execute procedure audit_trigger_fn();
 
-create trigger restock_order_audit_trigger
-    after insert or update or delete
-    on restock_order
-    for each row
-execute procedure audit_trigger_fn();
-
 create procedure transfer_stock(IN p_product_id text, IN p_source_branch_id text, IN p_target_branch_id text, IN p_transfer_quantity integer)
     language plpgsql
 as
@@ -769,4 +772,220 @@ BEGIN
     );
 END;
 $$;
+
+create procedure apply_promotion(IN p_product_id character varying, IN p_promotion_name character varying, IN p_discount_percentage numeric, IN p_start_date date, IN p_end_date date)
+    language plpgsql
+as
+$$
+DECLARE
+    pro_promotion_id INTEGER;
+    pro_product RECORD;
+    pro_current_date DATE := CURRENT_DATE;
+    pro_discount_factor NUMERIC;
+BEGIN
+    -- Insert a new promotion with the provided discount and dates
+    INSERT INTO public.promotion (
+        promotion_name,
+        discount_percentage,
+        start_date,
+        end_date
+    ) VALUES (
+        p_promotion_name,
+        p_discount_percentage,
+        p_start_date,
+        p_end_date
+    ) RETURNING promotion_id INTO pro_promotion_id;
+
+    -- Associate the product with this promotion
+    INSERT INTO public.product_promotion (product_id, promotion_id)
+    VALUES (p_product_id, pro_promotion_id);
+
+    -- Get the discount factor
+    pro_discount_factor := 1 - (p_discount_percentage / 100.0);
+
+    -- Get current product details
+    SELECT * INTO pro_product
+    FROM public.product
+    WHERE product_id = p_product_id;
+
+    -- Make sure original price is not null
+    IF pro_product.original_price IS NULL THEN
+        UPDATE public.product
+        SET original_price = price
+        WHERE product_id = p_product_id;
+
+        -- Get product details to have updated original_price
+        SELECT * INTO pro_product
+        FROM public.product
+        WHERE product_id = p_product_id;
+    END IF;
+
+    -- Check if current date is within the promotion period
+    IF pro_current_date BETWEEN p_start_date AND p_end_date THEN
+        -- Promotion is active, apply the discount
+        UPDATE product
+        SET price = original_price * pro_discount_factor,
+            is_on_promotion = TRUE
+        WHERE product_id = p_product_id;
+    ELSE
+        -- Promotion not active or ended, restore the original price
+        UPDATE public.product
+        SET price = original_price,
+            is_on_promotion = FALSE
+        WHERE product_id = p_product_id;
+
+        -- If the current date is past the promotion end_date, optionally clear original_price
+        IF pro_current_date > p_end_date THEN
+            UPDATE public.product
+            SET original_price = NULL
+            WHERE product_id = p_product_id;
+        END IF;
+    END IF;
+END;
+$$;
+
+create procedure add_product(IN p_product_name character varying, IN p_barcode character varying, IN p_category character varying, IN p_price numeric)
+    language plpgsql
+as
+$$
+BEGIN
+    INSERT INTO product (product_name, barcode, category, price)
+    VALUES ( p_product_name, p_barcode, p_category, p_price)
+    ON CONFLICT (product_id) DO NOTHING;
+END;
+$$;
+
+create procedure add_inventory(IN p_branch_id character varying, IN p_product_id character varying, IN p_quantity integer)
+    language plpgsql
+as
+$$
+BEGIN
+    INSERT INTO inventory (branch_id, product_id, stock_quantity)
+    VALUES (p_branch_id, p_product_id, p_quantity)
+    ON CONFLICT (branch_id, product_id)
+    DO UPDATE SET stock_quantity = EXCLUDED.stock_quantity;
+END;
+$$;
+
+create procedure create_order(IN p_customer_id integer, IN p_branch_id character varying, IN p_total_amount numeric, OUT o_order_id integer)
+    language plpgsql
+as
+$$
+BEGIN
+    INSERT INTO order_table (customer_id, branch_id, total_amount, payment_status, order_status)
+    VALUES (p_customer_id, p_branch_id, p_total_amount, 'Pending', 'Pending')
+    RETURNING order_id INTO o_order_id;
+END;
+$$;
+
+create procedure add_order_item(IN p_order_id integer, IN p_product_id character varying, IN p_quantity integer, IN p_subtotal numeric)
+    language plpgsql
+as
+$$
+BEGIN
+    INSERT INTO order_item (order_id, product_id, quantity, subtotal)
+    VALUES (p_order_id, p_product_id, p_quantity, p_subtotal);
+END;
+$$;
+
+create procedure set_payment_status(IN o_order_id integer, IN p_payment_status character varying)
+    language plpgsql
+as
+$$
+BEGIN
+    UPDATE order_table
+    SET payment_status = p_payment_status
+    WHERE order_id = o_order_id;
+END;
+$$;
+
+create procedure check_order_status(IN o_order_id integer)
+    language plpgsql
+as
+$$
+DECLARE
+    v_status VARCHAR(20);
+BEGIN
+    SELECT order_status INTO v_status
+    FROM order_table
+    WHERE order_id = o_order_id;
+    RAISE NOTICE 'Order % status: %', o_order_id, v_status;
+END;
+$$;
+
+create procedure add_promotion(IN p_promotion_name character varying, IN p_discount_percentage numeric, IN p_start_date date, IN p_end_date date, OUT o_promotion_id integer)
+    language plpgsql
+as
+$$
+BEGIN
+    INSERT INTO promotion (promotion_name, discount_percentage, start_date, end_date)
+    VALUES (p_promotion_name, p_discount_percentage, p_start_date, p_end_date)
+    RETURNING promotion_id INTO o_promotion_id;
+END;
+$$;
+
+create procedure delete_employee(IN emp_id character varying)
+    language plpgsql
+as
+$$
+BEGIN
+    -- Validate the format of employee ID
+    IF LENGTH(emp_id) <= 5 THEN
+        RAISE EXCEPTION 'Employee ID is in the wrong format: %', emp_id;
+    END IF;
+
+    -- Check if the employee exists
+    IF NOT EXISTS (SELECT 1 FROM employee WHERE employee_id = emp_id) THEN
+        RAISE EXCEPTION 'Employee with ID % does not exist.', emp_id;
+    END IF;
+
+    -- Delete the employee
+    DELETE FROM employee
+    WHERE employee_id = emp_id;
+
+    RAISE NOTICE 'Employee with ID % has been successfully deleted.', emp_id;
+END;
+$$;
+
+create procedure delete_customer(IN cust_id integer)
+    language plpgsql
+as
+$$
+BEGIN
+    -- Check if the customer exists
+    IF NOT EXISTS (SELECT 1 FROM customer WHERE customer_id = cust_id) THEN
+        RAISE EXCEPTION 'Customer with ID % does not exist.', cust_id;
+    END IF;
+
+    -- Delete the customer
+    DELETE FROM customer
+    WHERE customer_id = cust_id;
+
+    RAISE NOTICE 'Customer with ID % has been successfully deleted.', cust_id;
+END;
+$$;
+
+create procedure delete_product(IN prod_id character varying)
+    language plpgsql
+as
+$$
+BEGIN
+    -- Validate the format of product ID (example: length must be greater than 3)
+    IF LENGTH(prod_id) <= 5 THEN
+        RAISE EXCEPTION 'Product ID is in the wrong format: %', prod_id;
+    END IF;
+
+    -- Check if the product exists
+    IF NOT EXISTS (SELECT 1 FROM product WHERE product_id = prod_id) THEN
+        RAISE EXCEPTION 'Product with ID % does not exist.', prod_id;
+    END IF;
+
+    -- Delete the product
+    DELETE FROM product
+    WHERE product_id = prod_id;
+
+    RAISE NOTICE 'Product with ID % has been successfully deleted.', prod_id;
+END;
+$$;
+
 
